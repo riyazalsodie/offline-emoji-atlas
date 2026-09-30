@@ -1,5 +1,5 @@
 {
-  "name": "flutter-emoji-atlas",
+  "name": "offline-emoji-atlas",
   "version": "1.0.0",
   "description": "Bundle emoji as one sprite sheet instead of fetching each glyph over HTTP. Zero network requests at runtime.",
   "type": "module",
@@ -15,6 +15,7 @@
   "bin": {
     "generate-emoji-atlas": "./bin/cli.js"
   },
+
   "files": [
     "bin",
     "src",

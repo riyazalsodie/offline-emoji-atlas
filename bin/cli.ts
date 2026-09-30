@@ -51,7 +51,7 @@ const USAGE = `
 generate-emoji-atlas - bundle emoji into one sprite sheet (zero runtime HTTP requests)
 
 Usage:
-  generate-emoji-atlas --picker <file.dart> [more.dart...] --out <dir> --dart-out <dir> [options]
+  generate-emoji-atlas --picker <file> [more...] --out <dir> [options]
 
 Required:
   --picker <file>        Dart file containing emoji string literals. Repeatable.

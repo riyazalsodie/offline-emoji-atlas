@@ -1,17 +1,19 @@
-# flutter-emoji-atlas
+# offline-emoji-atlas
 
 **Stop downloading emoji one at a time.** Bundle them into a single sprite sheet
 and get **zero** runtime network requests.
 
-If your Flutter chat, comment box, or reaction picker renders emoji as
-`Image.network('https://some-cdn/...')`, this is for you.
+If your app — in Flutter, React, Vue, Svelte, Angular or anything else — renders
+emoji as `Image.network` / `<img src="https://some-cdn/...">`, this is for you.
+The generator is framework-agnostic: it produces a PNG plus a plain JSON
+manifest, and a ~100-line renderer is all that is platform-specific.
 
 | | Before | After |
 |---|---|---|
 | Network requests to open a picker | 40–70 | **0** |
 | Third-party CDN dependency | Yes, fragile | **None** |
-| Extra APK size | 0 | ~2 MB (typically) |
-| Image cache behaviour | Hundreds of images thrash `ImageCache` | One shared bitmap |
+| Extra APK/bundle size | 0 | ~2 MB (typically) |
+| Image cache behaviour | Hundreds of images thrash the cache | One shared bitmap |
 
 ---
 
@@ -95,7 +97,7 @@ memory stays flat no matter how many emoji are on screen.
 ## Install
 
 ```bash
-npm install flutter-emoji-atlas
+npm install offline-emoji-atlas
 # sharp is the only dependency (image compositing)
 ```
 
@@ -145,9 +147,9 @@ On the web, just keep the PNG and JSON next to your HTML.
 ### 3. Copy the runtime
 
 ```bash
-cp node_modules/flutter-emoji-atlas/dart/emoji_atlas.dart lib/widgets/
+cp node_modules/offline-emoji-atlas/dart/emoji_atlas.dart lib/widgets/
 # or
-cp node_modules/flutter-emoji-atlas/runtime/web/emoji-atlas.js public/
+cp node_modules/offline-emoji-atlas/runtime/web/emoji-atlas.js public/
 ```
 
 ### 4. Replace `Image.network`
@@ -341,11 +343,23 @@ glyphs from whichever source you configure, at your build time.
 
 | Source | Licence | Safe to bundle in a shipped app? |
 |---|---|---|
-| `--source apple` (default) | Apple artwork. Third-party CDN (`emojicdn.elk.sh`). | **Your call.** Apple Color Emoji is Apple's property and is *not* licensed for third-party redistribution. Also note the upstream service may rate-limit or disappear. |
-| `--source noto` | SIL Open Font License 1.1 | **Yes.** Explicitly redistributable. Different artwork. |
-| `--source custom` | Whatever you point at | Depends on your source |
+| `--source noto` | SIL Open Font License 1.1 | **Yes.** Explicitly redistributable. |
+| `--source apple` *(CLI default)* | Apple artwork via a third-party CDN (`emojicdn.elk.sh`) | **Your decision.** Apple Color Emoji is Apple's property and is *not* licensed for third-party redistribution. The upstream service may also rate-limit or disappear. |
+| `--source custom` | Whatever you point it at | Depends on your source |
 
-If you want a clearly safe default, use `--source noto`.
+### Which should I use?
+
+**If you are shipping a commercial or public app, use `--source noto`.**
+
+Apple's emoji are Apple's property, and bundling them in an app you distribute is
+a redistribution question that is yours to answer — this project deliberately
+does not answer it for you, and ships no artwork so that nothing here is a
+licensing problem in itself. Noto Color Emoji is licensed for redistribution, so
+it is the safe default even though the artwork differs slightly.
+
+`--source apple` is the CLI default only so the behaviour matches what this tool
+was originally extracted from, and because Apple's artwork is what most people
+mean by "real emoji". **Switch to `--source noto` if you are unsure.**
 
 ---
 
