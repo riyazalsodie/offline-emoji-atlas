@@ -119,6 +119,16 @@ Produces:
 ```
 assets/emoji/emoji_atlas.png          ← the sprite sheet
 lib/widgets/emoji_atlas_manifest.dart ← generated: emoji -> cell index
+assets/emoji/emoji_atlas.json         ← the universal manifest
+```
+
+For a web project, `--emit json` alone is enough and `--dart-out` is not needed:
+
+```bash
+npx generate-emoji-atlas \
+  --picker src/emoji-picker.ts \
+  --out public/emoji \
+  --emit json
 ```
 
 ### 2. Declare the asset
@@ -130,10 +140,14 @@ flutter:
     - assets/emoji/
 ```
 
+On the web, just keep the PNG and JSON next to your HTML.
+
 ### 3. Copy the runtime
 
 ```bash
 cp node_modules/flutter-emoji-atlas/dart/emoji_atlas.dart lib/widgets/
+# or
+cp node_modules/flutter-emoji-atlas/runtime/web/emoji-atlas.js public/
 ```
 
 ### 4. Replace `Image.network`
@@ -184,8 +198,10 @@ renders it.** You can never end up with an empty box.
 
 ```
 --picker <file.dart>    Dart file with emoji literals. Repeatable for multiple apps.
---out <dir>             Where to write the atlas.          (default required)
---dart-out <dir>        Where to write the manifest.       (default required)
+--out <dir>             Where to write the atlas.           (required)
+--emit <formats>        dart | json | both.                 default both
+--dart-out <dir>        Where to write the Dart manifest.   (required if dart)
+--json-out <dir>        Where to write the JSON manifest.   (default: --out)
 
 --cell <px>             Cell size.              default 96
 --columns <n>           Grid width.             default 32
@@ -236,6 +252,85 @@ npx generate-emoji-atlas \
   --region-end '];' \
   --out assets/emoji --dart-out lib/widgets
 ```
+
+---
+
+## Runtimes
+
+The **generator is universal.** It emits a sprite sheet (a plain PNG) plus a plain
+**JSON manifest** — both framework-agnostic. Only the ~100-line renderer that
+draws a cell is platform-specific, and any language can write one in about 20
+lines from the manifest.
+
+### JSON manifest (the canonical format)
+
+```json
+{
+  "asset": "assets/emoji/emoji_atlas.png",
+  "fileName": "emoji_atlas.png",
+  "columns": 32,
+  "cellSize": 96,
+  "width": 3072,
+  "height": 2688,
+  "count": 887,
+  "index": { "😀": 0, "😃": 1 }
+}
+```
+
+To crop cell `i`: `x = (i % columns) * cellSize`, `y = floor(i / columns) * cellSize`.
+
+### Included
+
+| Runtime | Path | Status |
+|---|---|---|
+| **Flutter / Dart** | `dart/emoji_atlas.dart` | Verified — `flutter analyze` clean, glyph mapping checked |
+| **Web (any framework)** | `runtime/web/emoji-atlas.js` | Verified — SVG crop math and fallback checked; see `runtime/web/index.html` for a runnable demo |
+
+The web runtime is dependency-free ES module and only touches the DOM, so it
+works unchanged in vanilla JS, React, Vue, Svelte, Angular and Astro. Two
+strategies:
+
+```js
+import { loadEmojiAtlas } from './emoji-atlas.js';
+
+const atlas = await loadEmojiAtlas('./emoji_atlas.json');
+
+el.appendChild(atlas.createSvg('🔥', 28));   // inline SVG, scales for free
+el.appendChild(atlas.createSpan('🔥', 28));  // CSS background-position
+el.innerHTML = atlas.markup('🔥', 28);       // for templating
+
+// Server-rendered markup: <span data-emoji="🔥" data-emoji-size="28">
+hydrateEmojiAtlas(atlas, document);
+```
+
+The SVG strategy is the default because an `<svg viewBox>` performs the cropping
+and scaling natively — no CSS, no JS on the hot path:
+
+```html
+<svg width="28" height="28" viewBox="96 0 96 96">
+  <image href="emoji_atlas.png" width="3072" height="2688" />
+</svg>
+```
+
+### Writing your own runtime
+
+The manifest is all you need. For example in Kotlin:
+
+```kotlin
+val i = manifest.index[emoji] ?: return  // fall back to system font
+val left = (i % manifest.columns) * manifest.cellSize
+val top  = (i / manifest.columns) * manifest.cellSize
+canvas.drawBitmap(bitmap, Rect(left, top, left + cell, top + cell),
+                  RectF(0f, 0f, size, size), paint)
+```
+
+Roughly equivalent shapes work for Swift (`CGContext` clip + `draw(in:from:)`),
+Unity (its native Sprite Atlas importer reads the same grid), .NET MAUI, and
+anything else with a 2D drawing API.
+
+> React Native has no built-in sprite primitive, so it needs `react-native-svg` or
+> a small native module. It is deliberately not included here — shipping an
+> adapter I cannot run would be worse than not shipping one.
 
 ---
 

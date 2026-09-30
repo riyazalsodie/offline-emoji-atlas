@@ -1,3 +1,4 @@
+import path from 'path';
 import type { PackResult } from './pack-atlas.ts';
 
 export interface ManifestOptions {
@@ -5,6 +6,34 @@ export interface ManifestOptions {
   assetPath: string;
   fileName: string;
   className?: string;
+}
+
+/**
+ * Emits the language-agnostic JSON manifest. This is the canonical format: any
+ * runtime in any language can read it. The Dart manifest below is a convenience
+ * wrapper for Flutter projects.
+ */
+export function renderJsonManifest({ atlas, assetPath }: ManifestOptions): string {
+  const index: Record<string, number> = {};
+  for (let i = 0; i < atlas.count; i++) {
+    index[atlas.order[i]] = i;
+  }
+
+  return JSON.stringify(
+    {
+      $schema: 'https://flutter-emoji-atlas.dev/schema/v1',
+      asset: assetPath,
+      fileName: path.basename(assetPath),
+      columns: atlas.columns,
+      cellSize: atlas.cellSize,
+      width: atlas.width,
+      height: atlas.height,
+      count: atlas.count,
+      index,
+    },
+    null,
+    2
+  );
 }
 
 /**

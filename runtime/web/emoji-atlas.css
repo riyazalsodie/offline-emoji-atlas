@@ -1,0 +1,31 @@
+/* Optional styling for the sprite-sheet runtime. The SVG strategy needs none of
+   this - the viewBox handles sizing - but these rules stop the inline element
+   from introducing extra layout space, which is the usual surprise. */
+
+.emoji-atlas {
+  display: inline-block;
+  vertical-align: -0.15em;
+  line-height: 1;
+  /* Prevent the browser from re-rasterising the whole atlas on zoom. */
+  will-change: transform;
+  user-select: none;
+}
+
+/* A grid of emoji from a JS array, as produced by atlas.createSvg(). */
+.emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.emoji-grid > * {
+  cursor: pointer;
+  border-radius: 0.25rem;
+  padding: 0.15rem;
+}
+
+.emoji-grid > *:hover,
+.emoji-grid > *:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}

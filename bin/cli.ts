@@ -18,14 +18,19 @@ import { fileURLToPath } from 'url';
 import { extractEmojiFromDart } from '../src/extract-emoji.ts';
 import { fetchGlyphs, SOURCE_NOTES, type SourceName } from '../src/fetch-glyphs.ts';
 import { packAtlas, type EncodeMode } from '../src/pack-atlas.ts';
-import { renderDartManifest } from '../src/write-manifest.ts';
+import { renderDartManifest, renderJsonManifest } from '../src/write-manifest.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+type EmitFormat = 'dart' | 'json' | 'both';
 
 interface Args {
   pickers: string[];
   out: string;
   dartOut: string;
+  jsonOut: string;
+  emit: EmitFormat;
+  jsonName: string;
   cellSize: number;
   columns: number;
   mode: EncodeMode;
@@ -51,7 +56,12 @@ Usage:
 Required:
   --picker <file>        Dart file containing emoji string literals. Repeatable.
   --out <dir>            Where to write emoji_atlas.<png|webp>  (e.g. assets/emoji)
-  --dart-out <dir>       Where to write the generated manifest  (e.g. lib/widgets)
+
+Manifests (at least one is required):
+  --emit <formats>       dart | json | both          default both
+  --dart-out <dir>       Where to write the Dart manifest  (required for --emit dart)
+  --json-out <dir>       Where to write the JSON manifest (required for --emit json)
+                         Defaults to --out when omitted.
 
 Optional:
   --cell <px>            Cell size in the grid. Default 96.
@@ -64,16 +74,17 @@ Optional:
   --url-template <tpl>   Required for --source custom. Use {encoded} and {codepoints}.
   --region-start <s>     Only scan text after this marker.
   --region-end <s>       Only scan text before this marker.
-  --manifest-name <f>    Manifest filename. Default emoji_atlas_manifest.dart
+  --manifest-name <f>    Dart manifest filename. Default emoji_atlas_manifest.dart
+  --json-name <f>        JSON manifest filename. Default emoji_atlas.json
   --class-name <n>       Dart class prefix. Default EmojiAtlas
   --cache-dir <dir>      Glyph cache. Default .emoji-cache
   --force                Rebuild even if the atlas looks up to date
   -h, --help             Show this help
 
 After generating:
-  1. Declare the asset in pubspec.yaml under "assets:"
-  2. Copy dart/emoji_atlas.dart into your project
-  3. Paint glyphs with EmojiAtlasPainter instead of Image.network
+  1. Declare the asset in pubspec.yaml / copy next to your HTML
+  2. Pick a runtime: dart/ (Flutter) or runtime/web/ (any web framework)
+  3. The JSON manifest works with any language - see README for the format
 `;
 
 function parseArgs(argv: string[]): Args {
@@ -81,6 +92,9 @@ function parseArgs(argv: string[]): Args {
     pickers: [],
     out: '',
     dartOut: '',
+    jsonOut: '',
+    emit: 'both',
+    jsonName: 'emoji_atlas.json',
     cellSize: 96,
     columns: 32,
     mode: 'lossless',
@@ -106,6 +120,9 @@ function parseArgs(argv: string[]): Args {
       case '--picker': args.pickers.push(next()); break;
       case '--out': args.out = next(); break;
       case '--dart-out': args.dartOut = next(); break;
+      case '--json-out': args.jsonOut = next(); break;
+      case '--emit': args.emit = next() as EmitFormat; break;
+      case '--json-name': args.jsonName = next(); break;
       case '--cell': args.cellSize = parseInt(next(), 10); break;
       case '--columns': args.columns = parseInt(next(), 10); break;
       case '--mode': args.mode = next() as EncodeMode; break;
@@ -131,7 +148,20 @@ function parseArgs(argv: string[]): Args {
 
   if (args.pickers.length === 0) throw new Error('At least one --picker is required.');
   if (!args.out) throw new Error('--out is required.');
-  if (!args.dartOut) throw new Error('--dart-out is required.');
+  if (!['dart', 'json', 'both'].includes(args.emit)) {
+    throw new Error('--emit must be one of: dart, json, both.');
+  }
+
+  const wantDart = args.emit === 'dart' || args.emit === 'both';
+  const wantJson = args.emit === 'json' || args.emit === 'both';
+  if (wantDart && !args.dartOut) {
+    throw new Error(`--dart-out is required when --emit is "${args.emit}".`);
+  }
+  if (wantJson && !args.jsonOut) {
+    // Default the JSON manifest next to the atlas so web projects get it free.
+    args.jsonOut = args.out;
+  }
+
   if (args.source === 'custom' && !args.urlTemplate) {
     throw new Error('--url-template is required when --source is "custom".');
   }
@@ -207,30 +237,46 @@ async function main(): Promise<void> {
       `-> ${(atlas.buffer.length / 1024).toFixed(0)} KB`
   );
 
+  const wantDart = args.emit === 'dart' || args.emit === 'both';
+  const wantJson = args.emit === 'json' || args.emit === 'both';
+
   // 4. Write outputs.
   fs.mkdirSync(args.out, { recursive: true });
-  fs.mkdirSync(args.dartOut, { recursive: true });
 
   const assetPath = `${args.out.replace(/\\/g, '/').replace(/\/+$/, '')}/${fileName}`;
   fs.writeFileSync(path.join(args.out, fileName), atlas.buffer);
-
-  const manifest = renderDartManifest({
-    atlas,
-    assetPath,
-    fileName,
-    className: args.className,
-  });
-  fs.writeFileSync(path.join(args.dartOut, args.manifestName), manifest);
-
   console.log(`\nWrote ${path.join(args.out, fileName)}`);
-  console.log(`Wrote ${path.join(args.dartOut, args.manifestName)}`);
 
+  if (wantDart) {
+    fs.mkdirSync(args.dartOut, { recursive: true });
+    fs.writeFileSync(
+      path.join(args.dartOut, args.manifestName),
+      renderDartManifest({ atlas, assetPath, fileName, className: args.className })
+    );
+    console.log(`Wrote ${path.join(args.dartOut, args.manifestName)}`);
+  }
+
+  if (wantJson) {
+    fs.mkdirSync(args.jsonOut, { recursive: true });
+    fs.writeFileSync(
+      path.join(args.jsonOut, args.jsonName),
+      renderJsonManifest({ atlas, assetPath, fileName, className: args.className })
+    );
+    console.log(`Wrote ${path.join(args.jsonOut, args.jsonName)}`);
+  }
+
+  const assetKey = args.out.replace(/\\/g, '/').replace(/\/+$/, '');
   console.log('\nNext steps:');
-  console.log(`  1. pubspec.yaml -> assets:`);
-  console.log(`       - ${args.out.replace(/\\/g, '/').replace(/\/+$/, '')}/`);
-  console.log(`  2. Copy dart/emoji_atlas.dart into your package.`);
-  console.log(`  3. Replace Image.network with EmojiAtlasPainter (see README).`);
-  console.log('\nAnything not in the manifest falls back to the OS emoji font, so tofu is impossible.');
+  if (wantDart) {
+    console.log(`  Flutter  : declare "- ${assetKey}/" under pubspec.yaml assets:`);
+    console.log(`             copy dart/emoji_atlas.dart, then use AtlasEmoji(...)`);
+  }
+  if (wantJson) {
+    console.log(`  Web      : copy ${path.join(args.jsonOut, args.jsonName)} next to your HTML`);
+    console.log(`             use runtime/web/emoji-atlas.js (works in any framework)`);
+    console.log(`  Other    : the JSON manifest is readable from any language`);
+  }
+  console.log('\nAnything not in the manifest falls back to the OS/system emoji font, so tofu is impossible.');
 }
 
 main().catch((err) => {

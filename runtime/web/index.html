@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>flutter-emoji-atlas &middot; web runtime demo</title>
+    <link rel="stylesheet" href="emoji-atlas.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #121216;
+        color: #fafafa;
+        font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+      p.sub { color: #a1a1aa; margin: 0 0 1.5rem; }
+      section { margin-bottom: 2rem; }
+      h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: #a1a1aa; margin: 0 0 0.75rem; }
+      .panel { background: #1a1a1f; border: 1px solid #2a2a30; border-radius: 10px; padding: 1rem; }
+      .sizes { display: flex; align-items: flex-end; gap: 1.25rem; }
+      .sizes figure { margin: 0; text-align: center; color: #71717a; font-size: 11px; }
+      .sizes figcaption { margin-top: 0.4rem; }
+      #log { font-family: ui-monospace, monospace; font-size: 12px; color: #a1a1aa; }
+    </style>
+  </head>
+  <body>
+    <h1>flutter-emoji-atlas &middot; web runtime</h1>
+    <p class="sub">
+      Same sprite sheet, zero network requests. Works in vanilla JS, React, Vue,
+      Svelte, Angular &mdash; it only touches the DOM.
+    </p>
+
+    <section>
+      <h2>Sizes (one atlas, any resolution)</h2>
+      <div class="panel sizes" id="sizes"></div>
+    </section>
+
+    <section>
+      <h2>SVG strategy (default)</h2>
+      <div class="panel emoji-grid" id="grid"></div>
+    </section>
+
+    <section>
+      <h2>CSS background-position strategy</h2>
+      <div class="panel emoji-grid" id="grid-span"></div>
+    </section>
+
+    <section>
+      <h2>Server-rendered markup + hydrate</h2>
+      <div class="panel emoji-grid" id="grid-hydrate">
+        <span data-emoji="🔥" data-emoji-size="28">fallback</span>
+        <span data-emoji="🎉" data-emoji-size="28">fallback</span>
+        <span data-emoji="🚀" data-emoji-size="28">fallback</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Not in the atlas &rarr; native system font</h2>
+      <div class="panel emoji-grid" id="grid-fallback"></div>
+      <p id="log"></p>
+    </section>
+
+    <script type="module">
+      import { loadEmojiAtlas, createEmojiAtlas, hydrateEmojiAtlas } from './emoji-atlas.js';
+
+      // Point these at your generated files.
+      const MANIFEST = './emoji_atlas.json';
+      const MANIFEST_INLINE = {
+        $schema: 'https://flutter-emoji-atlas.dev/schema/v1',
+        asset: './emoji_atlas.png',
+        fileName: 'emoji_atlas.png',
+        columns: 4,
+        cellSize: 96,
+        width: 384,
+        height: 192,
+        count: 8,
+        index: { '😀': 0, '🔥': 1, '🎉': 2, '🚀': 3, '❤️': 4, '👍': 5, '😂': 6, '💯': 7 },
+      };
+
+      async function main() {
+        let atlas;
+        try {
+          atlas = await loadEmojiAtlas(MANIFEST);
+        } catch (err) {
+          // No generated atlas next to this file: fall back to the tiny inline
+          // manifest so the demo still shows something.
+          document.getElementById('log').textContent =
+            `Could not load ${MANIFEST} (${err.message}). Using the inline demo manifest.`;
+          atlas = createEmojiAtlas(MANIFEST_INLINE);
+        }
+
+        const [top, , ...rest] = [...atlas.manifest.index.keys()];
+        const emoji = [top, ...rest].slice(0, 40);
+
+        // 1. One atlas, many display sizes.
+        const sizes = document.getElementById('sizes');
+        for (const px of [16, 24, 32, 48, 64]) {
+          const fig = document.createElement('figure');
+          fig.appendChild(atlas.createSvg(top, px));
+          const cap = document.createElement('figcaption');
+          cap.textContent = `${px}px`;
+          fig.appendChild(cap);
+          sizes.appendChild(fig);
+        }
+
+        // 2. Grid via inline SVG.
+        const grid = document.getElementById('grid');
+        for (const e of emoji) grid.appendChild(atlas.createSvg(e, 28));
+
+        // 3. Grid via CSS background-position.
+        const gridSpan = document.getElementById('grid-span');
+        for (const e of emoji) gridSpan.appendChild(atlas.createSpan(e, 28));
+
+        // 4. Hydrate server-rendered placeholders.
+        hydrateEmojiAtlas(atlas, document.getElementById('grid-hydrate'));
+
+        // 5. Emoji absent from the atlas fall back to the system font.
+        const fb = document.getElementById('grid-fallback');
+        for (const e of ['🫠', '🪩', '🍋‍🟩']) {
+          fb.appendChild(atlas.createSvg(e, 28));
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
